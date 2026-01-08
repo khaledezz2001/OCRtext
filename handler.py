@@ -55,8 +55,8 @@ def handler(event):
 
     log("Running OCR")
 
-    # ✅ CORRECT CALL
-    text = model.chat(image_path, "ocr")
+    # ✅ CORRECT SIGNATURE
+    text = model.chat("", image_path, "ocr")
 
     log("OCR finished")
 
