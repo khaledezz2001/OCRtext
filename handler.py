@@ -1,10 +1,10 @@
 import base64
 import io
+import time
 import torch
+import runpod
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForVision2Seq
-import time
-import sys
 
 MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
@@ -24,19 +24,15 @@ def load_model():
     if processor is not None and model is not None:
         return
 
-    log("Starting model load...")
+    log("Starting model load")
     log(f"Device: {device}")
 
-    start = time.time()
-
-    log("Loading processor...")
     processor = AutoProcessor.from_pretrained(
         MODEL_ID,
         trust_remote_code=True
     )
     log("Processor loaded")
 
-    log("Loading model...")
     model = AutoModelForVision2Seq.from_pretrained(
         MODEL_ID,
         trust_remote_code=True,
@@ -44,7 +40,7 @@ def load_model():
     ).to(device)
 
     model.eval()
-    log(f"Model loaded in {time.time() - start:.1f}s")
+    log("Model loaded")
 
 
 def decode_image(b64: str) -> Image.Image:
@@ -53,35 +49,37 @@ def decode_image(b64: str) -> Image.Image:
 
 
 def handler(event):
-    try:
-        log("Handler called")
-        load_model()
+    log("Handler called")
 
-        image_b64 = event["input"]["image"]
-        image = decode_image(image_b64)
+    load_model()
 
-        log("Running inference...")
+    image_b64 = event["input"]["image"]
+    image = decode_image(image_b64)
 
-        inputs = processor(images=image, return_tensors="pt").to(device)
+    log("Running inference")
 
-        with torch.no_grad():
-            output_ids = model.generate(
-                **inputs,
-                max_new_tokens=2048
-            )
+    inputs = processor(images=image, return_tensors="pt").to(device)
 
-        text = processor.batch_decode(
-            output_ids,
-            skip_special_tokens=True
-        )[0]
+    with torch.no_grad():
+        output_ids = model.generate(
+            **inputs,
+            max_new_tokens=2048
+        )
 
-        log("Inference complete")
+    text = processor.batch_decode(
+        output_ids,
+        skip_special_tokens=True
+    )[0]
 
-        return {
-            "text": text,
-            "format": "markdown"
-        }
+    log("Inference complete")
 
-    except Exception as e:
-        log(f"ERROR: {e}")
-        return {"error": str(e)}
+    return {
+        "text": text,
+        "format": "markdown"
+    }
+
+
+# 🔥 THIS IS THE LINE YOU WERE MISSING
+runpod.serverless.start({
+    "handler": handler
+})
