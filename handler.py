@@ -3,13 +3,11 @@ import io
 import torch
 import runpod
 from PIL import Image
-from transformers import AutoImageProcessor, AutoModelForVision2Seq
+from transformers import AutoModelForVision2Seq
 
 MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
-image_processor = None
 model = None
 
 
@@ -18,18 +16,11 @@ def log(msg):
 
 
 def load_model():
-    global image_processor, model
-
-    if image_processor is not None and model is not None:
+    global model
+    if model is not None:
         return
 
-    log("Loading image processor...")
-    image_processor = AutoImageProcessor.from_pretrained(
-        MODEL_ID,
-        trust_remote_code=True
-    )
-
-    log("Loading model...")
+    log("Loading GOT-OCR model...")
     model = AutoModelForVision2Seq.from_pretrained(
         MODEL_ID,
         trust_remote_code=True,
@@ -52,20 +43,17 @@ def handler(event):
     image_b64 = event["input"]["image"]
     image = decode_image(image_b64)
 
-    log("Preprocessing image")
-    inputs = image_processor(images=image, return_tensors="pt").to(device)
+    log("Running OCR inference")
 
-    log("Running inference")
     with torch.no_grad():
-        generated_ids = model.generate(
-            **inputs,
+        # 🔥 GOT-OCR handles image preprocessing internally
+        output = model.generate(
+            images=image,
             max_new_tokens=2048
         )
 
-    text = image_processor.batch_decode(
-        generated_ids,
-        skip_special_tokens=True
-    )[0]
+    # Model returns text directly
+    text = output[0] if isinstance(output, list) else output
 
     log("Inference complete")
 
