@@ -1,5 +1,7 @@
 import base64
 import io
+import os
+import uuid
 import torch
 import runpod
 from PIL import Image
@@ -9,6 +11,7 @@ MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model = None
+TMP_DIR = "/tmp"
 
 
 def log(msg):
@@ -32,9 +35,15 @@ def load_model():
     log("Model loaded successfully")
 
 
-def decode_image(b64: str) -> Image.Image:
+def save_base64_image(b64: str) -> str:
     image_bytes = base64.b64decode(b64)
-    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+
+    filename = f"{uuid.uuid4().hex}.png"
+    path = os.path.join(TMP_DIR, filename)
+    image.save(path)
+
+    return path
 
 
 def handler(event):
@@ -42,12 +51,12 @@ def handler(event):
     load_model()
 
     image_b64 = event["input"]["image"]
-    image = decode_image(image_b64)
+    image_path = save_base64_image(image_b64)
 
     log("Running OCR")
 
-    # ✅ CORRECT CALL (positional argument)
-    text = model.chat(image)
+    # ✅ CORRECT CALL
+    text = model.chat(image_path, "ocr")
 
     log("OCR finished")
 
