@@ -25,7 +25,7 @@ def load_model():
     model = AutoModel.from_pretrained(
         MODEL_ID,
         trust_remote_code=True,
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32
+        dtype=torch.float16 if device == "cuda" else torch.float32
     ).to(device)
 
     model.eval()
@@ -46,9 +46,8 @@ def handler(event):
 
     log("Running OCR")
 
-    # 🔥 THIS IS THE IMPORTANT PART
-    # GOT-OCR exposes OCR via `chat`
-    text = model.chat(image=image)
+    # ✅ CORRECT CALL (positional argument)
+    text = model.chat(image)
 
     log("OCR finished")
 
@@ -58,7 +57,6 @@ def handler(event):
     }
 
 
-# 🚀 REQUIRED for RunPod Serverless
 runpod.serverless.start({
     "handler": handler
 })
