@@ -1,16 +1,15 @@
 import base64
 import io
-import time
 import torch
 import runpod
 from PIL import Image
-from transformers import AutoProcessor, AutoModelForVision2Seq
+from transformers import AutoImageProcessor, AutoModelForVision2Seq
 
 MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-processor = None
+image_processor = None
 model = None
 
 
@@ -19,20 +18,18 @@ def log(msg):
 
 
 def load_model():
-    global processor, model
+    global image_processor, model
 
-    if processor is not None and model is not None:
+    if image_processor is not None and model is not None:
         return
 
-    log("Starting model load")
-    log(f"Device: {device}")
-
-    processor = AutoProcessor.from_pretrained(
+    log("Loading image processor...")
+    image_processor = AutoImageProcessor.from_pretrained(
         MODEL_ID,
         trust_remote_code=True
     )
-    log("Processor loaded")
 
+    log("Loading model...")
     model = AutoModelForVision2Seq.from_pretrained(
         MODEL_ID,
         trust_remote_code=True,
@@ -40,7 +37,7 @@ def load_model():
     ).to(device)
 
     model.eval()
-    log("Model loaded")
+    log("Model loaded successfully")
 
 
 def decode_image(b64: str) -> Image.Image:
@@ -50,24 +47,23 @@ def decode_image(b64: str) -> Image.Image:
 
 def handler(event):
     log("Handler called")
-
     load_model()
 
     image_b64 = event["input"]["image"]
     image = decode_image(image_b64)
 
+    log("Preprocessing image")
+    inputs = image_processor(images=image, return_tensors="pt").to(device)
+
     log("Running inference")
-
-    inputs = processor(images=image, return_tensors="pt").to(device)
-
     with torch.no_grad():
-        output_ids = model.generate(
+        generated_ids = model.generate(
             **inputs,
             max_new_tokens=2048
         )
 
-    text = processor.batch_decode(
-        output_ids,
+    text = image_processor.batch_decode(
+        generated_ids,
         skip_special_tokens=True
     )[0]
 
@@ -79,7 +75,7 @@ def handler(event):
     }
 
 
-# 🔥 THIS IS THE LINE YOU WERE MISSING
+# 🚀 REQUIRED for RunPod Serverless
 runpod.serverless.start({
     "handler": handler
 })
