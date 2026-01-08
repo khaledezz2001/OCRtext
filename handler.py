@@ -12,11 +12,16 @@ MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 # -------------------------------------------------
-# Load model once (cold start only)
+# Load model ONCE (cold start)
 # -------------------------------------------------
-processor = AutoProcessor.from_pretrained(MODEL_ID)
+processor = AutoProcessor.from_pretrained(
+    MODEL_ID,
+    trust_remote_code=True
+)
+
 model = AutoModelForVision2Seq.from_pretrained(
     MODEL_ID,
+    trust_remote_code=True,
     torch_dtype=torch.float16 if device == "cuda" else torch.float32
 ).to(device)
 
@@ -27,16 +32,10 @@ model.eval()
 # -------------------------------------------------
 def decode_base64_image(b64: str) -> Image.Image:
     image_bytes = base64.b64decode(b64)
-    image = Image.open(io.BytesIO(image_bytes))
-    return image.convert("RGB")
+    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
 def clean_text(text: str) -> str:
-    """
-    Light cleanup:
-    - remove empty lines
-    - normalize spacing
-    """
     lines = [line.strip() for line in text.splitlines()]
     lines = [line for line in lines if line]
     return "\n".join(lines)
@@ -49,18 +48,17 @@ def handler(event):
     """
     Expected input:
     {
-        "input": {
-        "image": "<base64>",
-        "language": "ru"
-        }
+      "input": {
+        "image": "<base64 image>"
+      }
     }
     """
     try:
         payload = event.get("input", {})
-
         image_b64 = payload.get("image")
+
         if not image_b64:
-            return {"error": "Missing 'image' (base64 string)"}
+            return {"error": "Missing 'image' field"}
 
         image = decode_base64_image(image_b64)
 
@@ -70,13 +68,13 @@ def handler(event):
         ).to(device)
 
         with torch.no_grad():
-            generated_ids = model.generate(
+            output_ids = model.generate(
                 **inputs,
                 max_new_tokens=4096
             )
 
         text = processor.batch_decode(
-            generated_ids,
+            output_ids,
             skip_special_tokens=True
         )[0]
 
@@ -91,4 +89,3 @@ def handler(event):
         return {
             "error": str(e)
         }
-
