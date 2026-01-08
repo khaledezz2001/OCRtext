@@ -6,14 +6,9 @@ from transformers import AutoProcessor, AutoModelForVision2Seq
 
 MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
-# -------------------------------------------------
-# Device
-# -------------------------------------------------
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# -------------------------------------------------
 # Load model ONCE (cold start)
-# -------------------------------------------------
 processor = AutoProcessor.from_pretrained(
     MODEL_ID,
     trust_remote_code=True
@@ -27,10 +22,8 @@ model = AutoModelForVision2Seq.from_pretrained(
 
 model.eval()
 
-# -------------------------------------------------
-# Helpers
-# -------------------------------------------------
-def decode_base64_image(b64: str) -> Image.Image:
+
+def decode_image(b64: str) -> Image.Image:
     image_bytes = base64.b64decode(b64)
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
@@ -41,9 +34,6 @@ def clean_text(text: str) -> str:
     return "\n".join(lines)
 
 
-# -------------------------------------------------
-# RunPod handler
-# -------------------------------------------------
 def handler(event):
     """
     Expected input:
@@ -54,13 +44,8 @@ def handler(event):
     }
     """
     try:
-        payload = event.get("input", {})
-        image_b64 = payload.get("image")
-
-        if not image_b64:
-            return {"error": "Missing 'image' field"}
-
-        image = decode_base64_image(image_b64)
+        image_b64 = event["input"]["image"]
+        image = decode_image(image_b64)
 
         inputs = processor(
             images=image,
@@ -78,14 +63,10 @@ def handler(event):
             skip_special_tokens=True
         )[0]
 
-        text = clean_text(text)
-
         return {
-            "text": text,
+            "text": clean_text(text),
             "format": "markdown"
         }
 
     except Exception as e:
-        return {
-            "error": str(e)
-        }
+        return {"error": str(e)}
