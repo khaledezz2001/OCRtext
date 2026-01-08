@@ -1,27 +1,33 @@
-FROM runpod/pytorch:2.0.1-py310-cuda118
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# -----------------------------
+# -------------------------------------------------
 # System deps
-# -----------------------------
+# -------------------------------------------------
 RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3-pip \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
     ca-certificates \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# -----------------------------
+RUN ln -s /usr/bin/python3 /usr/bin/python
+RUN pip install --upgrade pip
+
+# -------------------------------------------------
 # Python deps
-# -----------------------------
+# -------------------------------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# -----------------------------
+# -------------------------------------------------
 # Pre-download GOT-OCR model
-# -----------------------------
+# -------------------------------------------------
 ENV HF_HOME=/models/hf
 
 RUN python - <<'EOF'
@@ -38,9 +44,9 @@ AutoModelForVision2Seq.from_pretrained(
 print("GOT-OCR2_0 downloaded")
 EOF
 
-# -----------------------------
+# -------------------------------------------------
 # App
-# -----------------------------
+# -------------------------------------------------
 COPY handler.py .
 
 CMD ["python", "-u", "handler.py"]
