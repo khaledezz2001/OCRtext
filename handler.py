@@ -3,7 +3,7 @@ import io
 import torch
 import runpod
 from PIL import Image
-from transformers import AutoModelForVision2Seq
+from transformers import AutoModel
 
 MODEL_ID = "stepfun-ai/GOT-OCR2_0"
 
@@ -20,8 +20,9 @@ def load_model():
     if model is not None:
         return
 
-    log("Loading GOT-OCR model...")
-    model = AutoModelForVision2Seq.from_pretrained(
+    log("Loading GOT-OCR2_0 model (custom code)...")
+
+    model = AutoModel.from_pretrained(
         MODEL_ID,
         trust_remote_code=True,
         torch_dtype=torch.float16 if device == "cuda" else torch.float32
@@ -43,19 +44,13 @@ def handler(event):
     image_b64 = event["input"]["image"]
     image = decode_image(image_b64)
 
-    log("Running OCR inference")
+    log("Running OCR")
 
-    with torch.no_grad():
-        # 🔥 GOT-OCR handles image preprocessing internally
-        output = model.generate(
-            images=image,
-            max_new_tokens=2048
-        )
+    # 🔥 THIS IS THE IMPORTANT PART
+    # GOT-OCR exposes OCR via `chat`
+    text = model.chat(image=image)
 
-    # Model returns text directly
-    text = output[0] if isinstance(output, list) else output
-
-    log("Inference complete")
+    log("OCR finished")
 
     return {
         "text": text,
