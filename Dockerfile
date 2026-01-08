@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.1.0-py310-cuda118
+FROM runpod/pytorch:2.0.1-py310-cuda118
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
