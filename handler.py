@@ -5,7 +5,7 @@ import runpod
 from PIL import Image
 from transformers import AutoProcessor, AutoModelForVision2Seq
 
-MODEL_ID = "reducto/RolmOCR"
+MODEL_PATH = "/models/hf/models--reducto--RolmOCR"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -23,12 +23,12 @@ def load_model():
         return
 
     log("Loading RolmOCR processor...")
-    processor = AutoProcessor.from_pretrained(MODEL_ID)
+    processor = AutoProcessor.from_pretrained(MODEL_PATH)
 
     log("Loading RolmOCR model...")
     model = AutoModelForVision2Seq.from_pretrained(
-        MODEL_ID,
-        torch_dtype=torch.float16 if device == "cuda" else torch.float32
+        MODEL_PATH,
+        dtype=torch.float16 if device == "cuda" else torch.float32
     ).to(device)
 
     model.eval()
@@ -52,15 +52,9 @@ def handler(event):
     inputs = processor(images=image, return_tensors="pt").to(device)
 
     with torch.no_grad():
-        output_ids = model.generate(
-            **inputs,
-            max_new_tokens=2048
-        )
+        output_ids = model.generate(**inputs, max_new_tokens=2048)
 
-    text = processor.batch_decode(
-        output_ids,
-        skip_special_tokens=True
-    )[0]
+    text = processor.batch_decode(output_ids, skip_special_tokens=True)[0]
 
     log("OCR finished")
 
