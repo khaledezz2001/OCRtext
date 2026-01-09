@@ -1,17 +1,16 @@
 import base64
 import io
-import os
-import uuid
 import torch
 import runpod
 from PIL import Image
-from transformers import AutoModel
+from transformers import AutoProcessor, AutoModelForVision2Seq
 
-MODEL_ID = "stepfun-ai/GOT-OCR2_0"
+MODEL_ID = "reducto/RolmOCR"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
+processor = None
 model = None
-TMP_DIR = "/tmp"
 
 
 def log(msg):
@@ -19,31 +18,26 @@ def log(msg):
 
 
 def load_model():
-    global model
-    if model is not None:
+    global processor, model
+    if processor is not None and model is not None:
         return
 
-    log("Loading GOT-OCR2_0 model (custom code)...")
+    log("Loading RolmOCR processor...")
+    processor = AutoProcessor.from_pretrained(MODEL_ID)
 
-    model = AutoModel.from_pretrained(
+    log("Loading RolmOCR model...")
+    model = AutoModelForVision2Seq.from_pretrained(
         MODEL_ID,
-        trust_remote_code=True,
-        dtype=torch.float16 if device == "cuda" else torch.float32
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32
     ).to(device)
 
     model.eval()
-    log("Model loaded successfully")
+    log("RolmOCR model loaded")
 
 
-def save_base64_image(b64: str) -> str:
+def decode_image(b64: str) -> Image.Image:
     image_bytes = base64.b64decode(b64)
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-    filename = f"{uuid.uuid4().hex}.png"
-    path = os.path.join(TMP_DIR, filename)
-    image.save(path)
-
-    return path
+    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
 def handler(event):
@@ -51,12 +45,22 @@ def handler(event):
     load_model()
 
     image_b64 = event["input"]["image"]
-    image_path = save_base64_image(image_b64)
+    image = decode_image(image_b64)
 
     log("Running OCR")
 
-    # ✅ CORRECT SIGNATURE
-    text = model.chat("", image_path, "ocr")
+    inputs = processor(images=image, return_tensors="pt").to(device)
+
+    with torch.no_grad():
+        output_ids = model.generate(
+            **inputs,
+            max_new_tokens=2048
+        )
+
+    text = processor.batch_decode(
+        output_ids,
+        skip_special_tokens=True
+    )[0]
 
     log("OCR finished")
 
