@@ -7,16 +7,21 @@ from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
 # ===============================
-# ENV FIXES (VERY IMPORTANT)
+# HARD OFFLINE MODE (MANDATORY)
 # ===============================
 os.environ["HF_HOME"] = "/models/hf"
 os.environ["TRANSFORMERS_CACHE"] = "/models/hf"
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"  # disable parallel temp downloads
+os.environ["HF_HUB_CACHE"] = "/models/hf"
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+os.environ["HF_HUB_DISABLE_XET"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 # ===============================
 # Configuration
 # ===============================
-MODEL_ID = "reducto/RolmOCR"
+MODEL_PATH = "/models/hf/reducto/RolmOCR"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 processor = None
@@ -29,7 +34,9 @@ def log(msg):
 
 def decode_image(b64: str) -> Image.Image:
     image_bytes = base64.b64decode(b64)
-    return Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image.thumbnail((2048, 2048), Image.BICUBIC)
+    return image
 
 
 # ===============================
@@ -43,23 +50,21 @@ def load_model():
 
     log("Loading RolmOCR processor...")
     processor = AutoProcessor.from_pretrained(
-        MODEL_ID,
-        use_fast=True,
+        MODEL_PATH,
         local_files_only=True
     )
 
     log("Loading RolmOCR model...")
     model = AutoModelForImageTextToText.from_pretrained(
-        MODEL_ID,
+        MODEL_PATH,
         device_map="auto",
-        dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
+        torch_dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
         low_cpu_mem_usage=True,
         local_files_only=True
     )
 
     model.eval()
     log("RolmOCR model loaded successfully")
-
 
 
 # ===============================
@@ -73,9 +78,6 @@ def handler(event):
         return {"error": "Missing image in input"}
 
     image = decode_image(event["input"]["image"])
-
-    log("Running OCR")
-
     prompt = "Read all text in this image."
 
     inputs = processor(
@@ -84,18 +86,16 @@ def handler(event):
         return_tensors="pt"
     ).to(DEVICE)
 
-    with torch.no_grad():
+    with torch.inference_mode():
         output_ids = model.generate(
             **inputs,
-            max_new_tokens=2048
+            max_new_tokens=512
         )
 
     text = processor.batch_decode(
         output_ids,
         skip_special_tokens=True
     )[0]
-
-    log("OCR finished")
 
     return {
         "text": text.strip(),
@@ -104,7 +104,13 @@ def handler(event):
 
 
 # ===============================
-# Start worker
+# Preload model at container start
+# ===============================
+log("Preloading model at startup...")
+load_model()
+
+# ===============================
+# Start RunPod worker
 # ===============================
 runpod.serverless.start({
     "handler": handler
