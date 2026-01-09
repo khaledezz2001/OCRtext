@@ -1,7 +1,7 @@
 # -------------------------------------------------
-# Base image (RunPod GPU requires amd64)
+# Base image
 # -------------------------------------------------
-FROM --platform=linux/amd64 nvidia/cuda:11.8.0-runtime-ubuntu22.04
+FROM nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
+    ca-certificates \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -37,7 +38,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # -------------------------------------------------
-# ✅ PRE-DOWNLOAD RolmOCR FILES (NO MODEL LOAD → NO OOM)
+# ✅ PRE-DOWNLOAD RolmOCR FILES (SAFE)
 # -------------------------------------------------
 RUN python - <<'EOF'
 from huggingface_hub import snapshot_download
@@ -46,7 +47,7 @@ model_id = "reducto/RolmOCR"
 
 snapshot_download(
     repo_id=model_id,
-    local_dir="/models/hf/models--reducto--RolmOCR",
+    local_dir="/models/hf/reducto/RolmOCR",
     local_dir_use_symlinks=False
 )
 
