@@ -78,7 +78,7 @@ def handler(event):
         return {"error": "Missing image in input"}
 
     image = decode_image(event["input"]["image"])
-    prompt = "Read all text in this image."
+    prompt = "<image>\nRead all text in this image."
 
     inputs = processor(
         text=prompt,
