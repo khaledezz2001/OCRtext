@@ -7,7 +7,7 @@ from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
 # ===============================
-# HARD OFFLINE MODE (MANDATORY) 
+# HARD OFFLINE MODE (RUNTIME)
 # ===============================
 os.environ["HF_HOME"] = "/models/hf"
 os.environ["TRANSFORMERS_CACHE"] = "/models/hf"
@@ -104,7 +104,7 @@ def handler(event):
 
 
 # ===============================
-# Preload model at container start
+# Preload at container start
 # ===============================
 log("Preloading model at startup...")
 load_model()
