@@ -16,7 +16,7 @@ ENV HF_HUB_ENABLE_HF_TRANSFER=0
 ENV HF_HUB_DISABLE_XET=1
 
 # -----------------------------
-# System deps
+# System dependencies
 # -----------------------------
 RUN apt-get update && apt-get install -y \
     python3.10 \
@@ -24,16 +24,21 @@ RUN apt-get update && apt-get install -y \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
-    ca-certificates \
     git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN pip install --upgrade pip
 
+# -----------------------------
+# Python dependencies
+# -----------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# -----------------------------
+# App
+# -----------------------------
 COPY handler.py .
 
 CMD ["python", "-u", "handler.py"]
