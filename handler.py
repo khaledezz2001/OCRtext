@@ -7,7 +7,7 @@ from PIL import Image
 from transformers import AutoProcessor, AutoModelForImageTextToText
 
 # ===============================
-# HARD OFFLINE MODE (RUNTIME)
+# OFFLINE MODE (RUNTIME)
 # ===============================
 os.environ["HF_HOME"] = "/models/hf"
 os.environ["TRANSFORMERS_CACHE"] = "/models/hf"
@@ -18,9 +18,6 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 os.environ["HF_HUB_DISABLE_XET"] = "1"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-# ===============================
-# Configuration
-# ===============================
 MODEL_PATH = "/models/hf/reducto/RolmOCR"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -33,33 +30,27 @@ def log(msg):
 
 
 def decode_image(b64: str) -> Image.Image:
-    image_bytes = base64.b64decode(b64)
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    image = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
     image.thumbnail((2048, 2048), Image.BICUBIC)
     return image
 
 
-# ===============================
-# Load model ONCE
-# ===============================
 def load_model():
     global processor, model
-
     if model is not None:
         return
 
-    log("Loading RolmOCR processor...")
+    log("Loading processor...")
     processor = AutoProcessor.from_pretrained(
         MODEL_PATH,
         local_files_only=True
     )
 
-    log("Loading RolmOCR model...")
+    log("Loading model...")
     model = AutoModelForImageTextToText.from_pretrained(
         MODEL_PATH,
         device_map="auto",
         dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
-        low_cpu_mem_usage=True,
         local_files_only=True
     )
 
@@ -67,24 +58,31 @@ def load_model():
     log("RolmOCR model loaded successfully")
 
 
-# ===============================
-# RunPod Handler
-# ===============================
 def handler(event):
     log("Handler called")
     load_model()
 
-    if "image" not in event["input"]:
-        return {"error": "Missing image in input"}
-
     image = decode_image(event["input"]["image"])
 
-    # ✅ REQUIRED FOR QWEN2.5-VL
-    prompt = "<image>\nRead all text in this image."
+    # ✅ CORRECT QWEN2.5-VL MESSAGE FORMAT
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {"type": "image"},
+                {"type": "text", "text": "Read all text in this image."}
+            ]
+        }
+    ]
 
-    # ✅ MUST BE LISTS (CRITICAL FIX)
+    # ✅ THIS INJECTS IMAGE TOKENS (CRITICAL)
+    text = processor.apply_chat_template(
+        messages,
+        add_generation_prompt=True
+    )
+
     inputs = processor(
-        text=[prompt],
+        text=[text],
         images=[image],
         return_tensors="pt"
     ).to(DEVICE)
@@ -95,28 +93,18 @@ def handler(event):
             max_new_tokens=512
         )
 
-    text = processor.batch_decode(
+    result = processor.batch_decode(
         output_ids,
         skip_special_tokens=True
     )[0]
 
-    log("OCR finished")
-
     return {
-        "text": text.strip(),
+        "text": result.strip(),
         "format": "markdown"
     }
 
 
-# ===============================
-# Preload model at container start
-# ===============================
-log("Preloading model at startup...")
+log("Preloading model...")
 load_model()
 
-# ===============================
-# Start RunPod worker
-# ===============================
-runpod.serverless.start({
-    "handler": handler
-})
+runpod.serverless.start({"handler": handler})
