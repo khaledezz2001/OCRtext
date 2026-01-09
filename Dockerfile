@@ -1,20 +1,23 @@
+# -------------------------------------------------
+# Base image (RunPod GPU requires amd64)
+# -------------------------------------------------
 FROM --platform=linux/amd64 nvidia/cuda:11.8.0-runtime-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
-# -----------------------------
-# Hugging Face cache locations
-# -----------------------------
+# -------------------------------------------------
+# Hugging Face cache & disk safety
+# -------------------------------------------------
 ENV HF_HOME=/models/hf
 ENV TRANSFORMERS_CACHE=/models/hf
 ENV HF_HUB_CACHE=/models/hf
 ENV HF_HUB_ENABLE_HF_TRANSFER=0
 ENV HF_HUB_DISABLE_XET=1
 
-# -----------------------------
-# System deps
-# -----------------------------
+# -------------------------------------------------
+# System dependencies
+# -------------------------------------------------
 RUN apt-get update && apt-get install -y \
     python3.10 \
     python3-pip \
@@ -27,32 +30,35 @@ RUN apt-get update && apt-get install -y \
 RUN ln -s /usr/bin/python3 /usr/bin/python
 RUN pip install --upgrade pip
 
-# -----------------------------
-# Python deps
-# -----------------------------
+# -------------------------------------------------
+# Python dependencies
+# -------------------------------------------------
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# -----------------------------
-# ✅ PRE-DOWNLOAD RolmOCR MODEL (CRITICAL FIX)
-# -----------------------------
+# -------------------------------------------------
+# ✅ PRE-DOWNLOAD RolmOCR FILES (NO MODEL LOAD → NO OOM)
+# -------------------------------------------------
 RUN python - <<'EOF'
-from transformers import AutoProcessor, AutoModelForVision2Seq
+from huggingface_hub import snapshot_download
 
 model_id = "reducto/RolmOCR"
 
-print("Downloading RolmOCR processor...")
-AutoProcessor.from_pretrained(model_id)
+snapshot_download(
+    repo_id=model_id,
+    local_dir="/models/hf/models--reducto--RolmOCR",
+    local_dir_use_symlinks=False
+)
 
-print("Downloading RolmOCR model...")
-AutoModelForVision2Seq.from_pretrained(model_id)
-
-print("RolmOCR download complete")
+print("RolmOCR files downloaded successfully")
 EOF
 
-# -----------------------------
-# App
-# -----------------------------
+# -------------------------------------------------
+# App code
+# -------------------------------------------------
 COPY handler.py .
 
+# -------------------------------------------------
+# RunPod entrypoint
+# -------------------------------------------------
 CMD ["python", "-u", "handler.py"]
