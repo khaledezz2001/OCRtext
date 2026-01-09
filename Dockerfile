@@ -7,13 +7,16 @@ ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /app
 
 # -------------------------------------------------
-# Hugging Face cache & disk safety
+# Hugging Face OFFLINE & CACHE SAFETY
 # -------------------------------------------------
 ENV HF_HOME=/models/hf
 ENV TRANSFORMERS_CACHE=/models/hf
 ENV HF_HUB_CACHE=/models/hf
+ENV HF_HUB_OFFLINE=1
+ENV TRANSFORMERS_OFFLINE=1
 ENV HF_HUB_ENABLE_HF_TRANSFER=0
 ENV HF_HUB_DISABLE_XET=1
+ENV TOKENIZERS_PARALLELISM=false
 
 # -------------------------------------------------
 # System dependencies
@@ -38,21 +41,25 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # -------------------------------------------------
-# ✅ PRE-DOWNLOAD RolmOCR FILES (SAFE)
+# ✅ FULL SNAPSHOT DOWNLOAD (CRITICAL)
 # -------------------------------------------------
 RUN python - <<'EOF'
 from huggingface_hub import snapshot_download
 
-model_id = "reducto/RolmOCR"
-
 snapshot_download(
-    repo_id=model_id,
+    repo_id="reducto/RolmOCR",
     local_dir="/models/hf/reducto/RolmOCR",
-    local_dir_use_symlinks=False
+    local_dir_use_symlinks=False,
+    allow_patterns=["*"]
 )
 
-print("RolmOCR files downloaded successfully")
+print("RolmOCR fully downloaded")
 EOF
+
+# -------------------------------------------------
+# (DEBUG – SAFE TO REMOVE LATER)
+# -------------------------------------------------
+RUN ls -lah /models/hf/reducto/RolmOCR
 
 # -------------------------------------------------
 # App code
