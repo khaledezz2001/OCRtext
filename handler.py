@@ -58,7 +58,7 @@ def load_model():
     model = AutoModelForImageTextToText.from_pretrained(
         MODEL_PATH,
         device_map="auto",
-        torch_dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
+        dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
         low_cpu_mem_usage=True,
         local_files_only=True
     )
@@ -78,11 +78,14 @@ def handler(event):
         return {"error": "Missing image in input"}
 
     image = decode_image(event["input"]["image"])
+
+    # ✅ REQUIRED FOR QWEN2.5-VL
     prompt = "<image>\nRead all text in this image."
 
+    # ✅ MUST BE LISTS (CRITICAL FIX)
     inputs = processor(
-        text=prompt,
-        images=image,
+        text=[prompt],
+        images=[image],
         return_tensors="pt"
     ).to(DEVICE)
 
@@ -97,6 +100,8 @@ def handler(event):
         skip_special_tokens=True
     )[0]
 
+    log("OCR finished")
+
     return {
         "text": text.strip(),
         "format": "markdown"
@@ -104,7 +109,7 @@ def handler(event):
 
 
 # ===============================
-# Preload at container start
+# Preload model at container start
 # ===============================
 log("Preloading model at startup...")
 load_model()
