@@ -44,7 +44,8 @@ def load_model():
     log("Loading RolmOCR processor...")
     processor = AutoProcessor.from_pretrained(
         MODEL_ID,
-        use_fast=True
+        use_fast=True,
+        local_files_only=True
     )
 
     log("Loading RolmOCR model...")
@@ -52,11 +53,13 @@ def load_model():
         MODEL_ID,
         device_map="auto",
         dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
-        low_cpu_mem_usage=True
+        low_cpu_mem_usage=True,
+        local_files_only=True
     )
 
     model.eval()
     log("RolmOCR model loaded successfully")
+
 
 
 # ===============================
