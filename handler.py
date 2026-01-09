@@ -1,9 +1,17 @@
+import os
 import base64
 import io
 import torch
 import runpod
 from PIL import Image
-from transformers import AutoProcessor, AutoModelForVision2Seq
+from transformers import AutoProcessor, AutoModelForImageTextToText
+
+# ===============================
+# ENV FIXES (VERY IMPORTANT)
+# ===============================
+os.environ["HF_HOME"] = "/models/hf"
+os.environ["TRANSFORMERS_CACHE"] = "/models/hf"
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"  # disable parallel temp downloads
 
 # ===============================
 # Configuration
@@ -15,25 +23,22 @@ processor = None
 model = None
 
 
-# ===============================
-# Helpers
-# ===============================
 def log(msg):
     print(f"[BOOT] {msg}", flush=True)
 
 
-def decode_image(b64_string: str) -> Image.Image:
-    image_bytes = base64.b64decode(b64_string)
+def decode_image(b64: str) -> Image.Image:
+    image_bytes = base64.b64decode(b64)
     return Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
 
 # ===============================
-# Model Loader (runs once)
+# Load model ONCE
 # ===============================
 def load_model():
     global processor, model
 
-    if model is not None and processor is not None:
+    if model is not None:
         return
 
     log("Loading RolmOCR processor...")
@@ -43,14 +48,15 @@ def load_model():
     )
 
     log("Loading RolmOCR model...")
-    model = AutoModelForVision2Seq.from_pretrained(
+    model = AutoModelForImageTextToText.from_pretrained(
         MODEL_ID,
+        device_map="auto",
         dtype=torch.float16 if DEVICE == "cuda" else torch.float32,
-        device_map="auto"
+        low_cpu_mem_usage=True
     )
 
     model.eval()
-    log("RolmOCR model loaded")
+    log("RolmOCR model loaded successfully")
 
 
 # ===============================
@@ -61,7 +67,7 @@ def handler(event):
     load_model()
 
     if "image" not in event["input"]:
-        return {"error": "Missing 'image' field in input"}
+        return {"error": "Missing image in input"}
 
     image = decode_image(event["input"]["image"])
 
@@ -95,7 +101,7 @@ def handler(event):
 
 
 # ===============================
-# Start Serverless Worker
+# Start worker
 # ===============================
 runpod.serverless.start({
     "handler": handler
